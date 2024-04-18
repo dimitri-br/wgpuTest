@@ -20,20 +20,16 @@ impl Pipeline{
     }
 
     fn create_layout(device: Handle<wgpu::Device>, bind_group_layouts: Vec<&wgpu::BindGroupLayout>) -> wgpu::PipelineLayout{
-        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor{
+        device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor{
             label: Some("Pipeline Layout"),
             bind_group_layouts: &bind_group_layouts,
             push_constant_ranges: &[],
-        });
-
-        layout
+        })
     }
 
     fn create_pipeline(device: Handle<wgpu::Device>, layout: wgpu::PipelineLayout,
                        shader: wgpu::ShaderModule) -> wgpu::RenderPipeline{
-
-
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor{
+        device.create_render_pipeline(&wgpu::RenderPipelineDescriptor{
             label: Some("Render Pipeline"),
             layout: Some(&layout),
             vertex: wgpu::VertexState{
@@ -68,9 +64,7 @@ impl Pipeline{
                 alpha_to_coverage_enabled: false,
             },
             multiview: None,
-        });
-
-        pipeline
+        })
     }
 }
 

@@ -42,9 +42,11 @@ impl SurfaceWrapper {
             .formats
             .iter()
             .copied()
-            .filter(|f| f.is_srgb())
-            .next()
-            .unwrap_or(surface_caps.formats[0]);
+            .find(|f| f.is_srgb())
+            .unwrap_or_else(|| {
+                error!("No sRGB format found. Falling back to first format.");
+                surface_caps.formats[0]
+            });
 
         // Configure the surface with the desired settings.
         let config = wgpu::SurfaceConfiguration {
@@ -77,7 +79,7 @@ impl SurfaceWrapper {
 
             config.width = new_size.width;
             config.height = new_size.height;
-            self.surface.configure(&device, &config);
+            self.surface.configure(&device, config);
 
             // Update the stored configuration
             self.surface_config = Some(config.clone());
