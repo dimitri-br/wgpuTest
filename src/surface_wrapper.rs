@@ -1,14 +1,14 @@
-use crate::Handle;
+use crate::{Handle, MutHandle};
 
 use log::{error, info};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use wgpu::{Adapter, Device, Instance, Surface, SurfaceConfiguration};
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
 
 pub struct SurfaceWrapper {
     surface: Handle<Surface<'static>>,
-    surface_config: Option<SurfaceConfiguration>,
+    surface_config: Option<MutHandle<SurfaceConfiguration>>,
 }
 
 impl SurfaceWrapper {
@@ -26,6 +26,13 @@ impl SurfaceWrapper {
 
     pub fn get_surface(&self) -> Handle<Surface> {
         self.surface.clone()
+    }
+
+    pub fn get_configuration(&self) -> MutHandle<SurfaceConfiguration> {
+        self.surface_config.clone().unwrap_or_else(|| {
+            error!("Surface configuration is not set.");
+            panic!("Surface configuration is not set.");
+        })
     }
 
     pub fn configure(
@@ -54,7 +61,7 @@ impl SurfaceWrapper {
             format: surface_format,
             width: size.width,
             height: size.height,
-            present_mode: surface_caps.present_modes[0],
+            present_mode: wgpu::PresentMode::Fifo,
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![],
             desired_maximum_frame_latency: 1,
@@ -64,7 +71,7 @@ impl SurfaceWrapper {
         self.surface.configure(&device, &config);
 
         // Update the stored configuration
-        self.surface_config = Some(config);
+        self.surface_config = Some(Arc::new(Mutex::new(config)));
     }
 
     pub fn resize(&mut self, device: Handle<Device>, new_size: winit::dpi::PhysicalSize<u32>) {
@@ -77,12 +84,11 @@ impl SurfaceWrapper {
         if let Some(config) = &mut self.surface_config {
             info!("Resizing window to {:?}", new_size);
 
+            let config = &mut *config.lock().unwrap();
+
             config.width = new_size.width;
             config.height = new_size.height;
             self.surface.configure(&device, config);
-
-            // Update the stored configuration
-            self.surface_config = Some(config.clone());
         }
     }
 
@@ -104,10 +110,14 @@ impl SurfaceWrapper {
                 // Resize the surface and attempt to get the frame again
                 self.surface.configure(
                     &device,
-                    self.surface_config.as_ref().unwrap_or_else(|| {
-                        error!("Surface configuration is not set.");
-                        panic!("Surface configuration is not set.");
-                    }),
+                    &self.surface_config
+                        .clone()
+                        .unwrap_or_else(|| {
+                            error!("Surface configuration is not set.");
+                            panic!("Surface configuration is not set.");
+                        })
+                        .lock()
+                        .unwrap(),
                 );
 
                 self.surface.get_current_texture().unwrap_or_else(|err| {

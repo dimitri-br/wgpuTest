@@ -1,3 +1,5 @@
+use crate::types;
+
 pub enum Command{
     LoadShader(String),
     LoadTexture(String),
@@ -6,4 +8,5 @@ pub enum Command{
     // Draw commands
     BindTexture(u32, String),
     DrawMesh(String),
+    DrawMeshInstanced(String, u32, Vec<types::Transform>),
 }

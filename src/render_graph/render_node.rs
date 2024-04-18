@@ -3,8 +3,9 @@ use super::commands::Command;
 use crate::pipeline::Pipeline;
 
 use std::fs::File;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::sync::Arc;
+use wgpu::include_spirv;
 use crate::render_graph::ResourceManager;
 use crate::types::{UniformBuffer, UniformBufferType, UniformSet};
 
@@ -16,6 +17,9 @@ pub struct RenderNode {
 
     static_uniform_set: Option<UniformSet>,
     dynamic_uniform_set: Option<UniformSet>,
+
+    // Configs
+    use_depth: bool,
 
     _device: Handle<wgpu::Device>,
     _queue: Handle<wgpu::Queue>,
@@ -30,6 +34,8 @@ impl RenderNode {
             static_uniform_set: None,
             dynamic_uniform_set: None,
 
+            use_depth: false,
+
             _device,
             _queue,
         }
@@ -37,6 +43,10 @@ impl RenderNode {
 
     pub fn add_command(&mut self, command: Command) {
         self.commands.push(command);
+    }
+
+    pub fn use_depth(&mut self, use_depth: bool) {
+        self.use_depth = use_depth;
     }
 
     pub fn add_uniform_buffer<T: bytemuck::Pod>(&mut self, data: T, buffer: UniformBufferType) -> Option<Handle<UniformBuffer>> {
@@ -129,14 +139,20 @@ impl RenderNode {
             bind_group_layouts.push(&dynamic_uniform_set.bind_group_layout);
         }
 
-        let pipeline = Pipeline::new(self._device.clone(), shader_module.unwrap(), bind_group_layouts);
+        let pipeline = Pipeline::new(self._device.clone(), shader_module.unwrap(),
+                                     bind_group_layouts, self.use_depth);
 
         self.pipeline = Some(pipeline);
     }
 
     pub(super) fn execute(&self, texture_view: &wgpu::TextureView,
-                          resource_manager: &ResourceManager, encoder: &mut wgpu::CommandEncoder) {
+                          resource_manager: &mut ResourceManager, encoder: &mut wgpu::CommandEncoder) {
         if let Some(pipeline) = &self.pipeline {
+
+            let depth_texture = resource_manager.load_depth_texture();
+
+            let depth_texture_locked = depth_texture.lock().unwrap();
+
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some(&self.name),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -147,7 +163,18 @@ impl RenderNode {
                         store: wgpu::StoreOp::Store,
                     },
                 })],
-                depth_stencil_attachment: None,
+                depth_stencil_attachment: if self.use_depth {
+                    Some(wgpu::RenderPassDepthStencilAttachment {
+                        view: &depth_texture_locked.view,
+                        depth_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(1.0),
+                            store: wgpu::StoreOp::Store,
+                        }),
+                        stencil_ops: None,
+                    })
+                } else {
+                    None
+                },
                 ..Default::default()
             });
 
@@ -173,6 +200,13 @@ impl RenderNode {
 
                         if let Some(mesh) = mesh {
                             mesh.render(&mut render_pass);
+                        }
+                    }
+                    Command::DrawMeshInstanced(mesh_id, count, _) => {
+                        let mesh = resource_manager.get_mesh(mesh_id.clone());
+
+                        if let Some(mesh) = mesh {
+                            mesh.render_instanced(&mut render_pass, *count);
                         }
                     }
                     Command::BindTexture(index, texture_id) => {

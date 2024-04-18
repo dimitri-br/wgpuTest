@@ -4,23 +4,22 @@ struct VertexInput {
     @location(2) tex_coords: vec2<f32>,
 };
 
+struct InstanceInput{
+    @location(3) position: vec3<f32>,
+    @location(4) rotation: vec3<f32>,
+    @location(5) scale: vec3<f32>,
+};
+
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) normal: vec3<f32>,
 };
 
-struct Transform {
-    position: vec4<f32>,
-    rotation: vec4<f32>,  // Assuming Euler angles in radians
-    scale: vec4<f32>,
-};
-
-@group(0) @binding(0)
-var<uniform> transform: Transform;
-
 @vertex
-fn vert_main(model: VertexInput) -> VertexOutput {
+fn vert_main(model: VertexInput, inst: InstanceInput) -> VertexOutput {
     var out: VertexOutput;
+
+    let transform = inst;
 
     // Create rotation matrix from Euler angles
     let cosX = cos(transform.rotation.x);

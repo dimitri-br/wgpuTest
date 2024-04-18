@@ -21,6 +21,8 @@ pub struct Renderer {
 
     render_graph: RenderGraph,
     resource_manager: ResourceManager,
+
+    last_frame: std::time::Instant,
 }
 
 impl Renderer {
@@ -60,7 +62,9 @@ impl Renderer {
 
         let resource_manager = ResourceManager::new(
             device_handler.get_device(),
-            device_handler.get_queue());
+            device_handler.get_queue(),
+            surface_wrapper.get_configuration(),
+        );
 
         info!("Successfully initialized renderer");
 
@@ -71,7 +75,9 @@ impl Renderer {
             surface_wrapper,
             size,
             render_graph,
-            resource_manager
+            resource_manager,
+
+            last_frame: std::time::Instant::now(),
         })
     }
 
@@ -88,17 +94,20 @@ impl Renderer {
     pub fn update(&mut self, event: Event<()>) {
         // Handle rendering events here
         match event {
+            Event::AboutToWait => {
+                // Continue rendering!
+                self.window.request_redraw();
+            },
             Event::WindowEvent { event, .. } => {
                 match event {
                     WindowEvent::Resized(new_size) => {
                         self.resize(new_size);
                         self.window.request_redraw();
                     }
+
                     // On RedrawRequested, request a redraw
                     WindowEvent::RedrawRequested => {
                         self.render();
-
-                        self.window.request_redraw();
                     }
                     _ => {}
                 }
@@ -107,7 +116,7 @@ impl Renderer {
         }
     }
 
-    pub fn render(&self) {
+    pub fn render(&mut self) {
         // Render the scene here
         // Get the next frame from the surface
         let frame = self
@@ -124,13 +133,17 @@ impl Renderer {
             .begin_command_buffer(Some("Command Encoder"));
 
         // Iterate over the render graph and execute each node
-        self.render_graph.execute(&frame_view, &self.resource_manager, &mut encoder);
+        self.render_graph.execute(&frame_view, &mut self.resource_manager, &mut encoder);
 
         // Submit the render pass
         self.device_handler.submit_command_encoder(encoder);
 
         // Present the frame
         frame.present();
+
+        info!("FrameTime: {:?}", self.last_frame.elapsed());
+        info!("FPS: {:?}", 1.0 / self.last_frame.elapsed().as_secs_f32());
+        self.last_frame = std::time::Instant::now();
     }
 
     pub fn get_render_node(&mut self, name: String) -> RenderNode{

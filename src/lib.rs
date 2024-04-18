@@ -9,6 +9,7 @@ mod pipeline;
 pub use renderer::Renderer;
 
 pub use render_graph::Command;
+pub use types::Transform;
 pub use types::UniformBufferType;
 
 use std::sync::{Arc, Mutex};

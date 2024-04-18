@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 # Graphics
 winit = "0.29.15"
-wgpu = "0.19.3"
+wgpu = { version = "0.19.4", features = ["spirv"] }
 wgpu-types = "0.19.2"
 image = "0.25.0"
 tobj = "4.0.2"

@@ -12,7 +12,7 @@ pub struct DeviceHandler {
 impl DeviceHandler {
     pub fn new(instance: Handle<Instance>, surface: Handle<Surface>) -> Self {
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::default(),
+            power_preference: wgpu::PowerPreference::HighPerformance,
             compatible_surface: Some(&surface),
             force_fallback_adapter: false,
         }))

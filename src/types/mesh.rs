@@ -1,8 +1,9 @@
-use crate::types::Vertex;
+use crate::types::{Instance, Vertex};
 use wgpu::util::DeviceExt;
 
 pub struct Mesh {
     submeshes: Vec<Submesh>,
+    instances: Option<Vec<Instance>>
 }
 
 impl Mesh {
@@ -66,7 +67,10 @@ impl Mesh {
             submeshes.push(Submesh::new(device, &vertices, indices));
         }
 
-        Self { submeshes }
+        Self {
+            submeshes,
+            instances: None
+        }
     }
 
     pub fn load_from_raw(device: &wgpu::Device, vertices: &[Vertex], indices: &[u32]) -> Self {
@@ -75,8 +79,14 @@ impl Mesh {
 
         Self {
             submeshes: vec![submesh],
+            instances: None
         }
     }
+
+    pub fn set_instances(&mut self, instances: Vec<Instance>) {
+        self.instances = Some(instances);
+    }
+
     pub fn render<'a>(&'a self, render_pass: &mut wgpu::RenderPass<'a>) {
         for submesh in self.submeshes.iter() {
             submesh.render(render_pass);
