@@ -140,7 +140,7 @@ impl RenderNode {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some(&self.name),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &texture_view,
+                    view: texture_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
