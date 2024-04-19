@@ -1,5 +1,5 @@
 use crate::types::{Instance, Vertex};
-use wgpu::util::DeviceExt;
+use wgpu::util::{DeviceExt, DrawIndirectArgs, DrawIndexedIndirectArgs};
 
 use super::InstanceBuffer;
 
@@ -85,7 +85,10 @@ impl Mesh {
         }
     }
 
-    pub fn set_instances(&mut self, instance_buffer: InstanceBuffer) {
+    pub fn set_instances(&mut self, device: &wgpu::Device, instance_buffer: InstanceBuffer) {
+        for submesh in self.submeshes.iter_mut(){
+            submesh.create_instanced_indirect_args(device, &instance_buffer);
+        }
         self.instance_buffer = Some(instance_buffer);
     }
 
@@ -108,6 +111,7 @@ pub struct Submesh {
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
     pub num_indices: u32,
+    indirect_args: Option<wgpu::Buffer>,
 }
 
 impl Submesh {
@@ -128,6 +132,7 @@ impl Submesh {
             vertex_buffer,
             index_buffer,
             num_indices: indices.len() as u32,
+            indirect_args: None,
         }
     }
 
@@ -141,6 +146,36 @@ impl Submesh {
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         instance_buffer.bind_as_buffer(1, render_pass);
-        render_pass.draw_indexed(0..self.num_indices, 0, 0..instance_buffer.get_instance_count() as u32);
+
+        if let Some(indirect_args) = &self.indirect_args{
+            render_pass.draw_indexed_indirect(indirect_args, 0);
+        }else{
+            render_pass.draw_indexed(0..self.num_indices, 0, 0..instance_buffer.get_instance_count() as u32);
+        }
+    }
+
+    fn create_instanced_indirect_args(&mut self, device: &wgpu::Device, instance_buffer: &InstanceBuffer){
+        let indirect_args = DrawIndexedIndirectArgs {
+            index_count: self.num_indices as u32,
+            instance_count: instance_buffer.get_instance_count() as u32,
+            first_index: 0,
+            base_vertex: 0,
+            first_instance: 0,
+        };
+
+        // cast to u8; note this is not a bytemuck cast as the struct is not repr(C)
+        let indirect_args_data = {
+            let indirect_args_ptr = &indirect_args as *const DrawIndexedIndirectArgs as *const u8;
+            unsafe { std::slice::from_raw_parts(indirect_args_ptr, std::mem::size_of::<DrawIndexedIndirectArgs>()) }
+        };
+        
+
+        let indirect_args_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Indirect Args Buffer"),
+            contents: indirect_args_data,
+            usage: wgpu::BufferUsages::INDIRECT,
+        });
+
+        self.indirect_args = Some(indirect_args_buffer);
     }
 }

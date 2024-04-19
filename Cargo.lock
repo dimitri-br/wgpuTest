@@ -1237,6 +1237,7 @@ dependencies = [
  "log",
  "nalgebra",
  "pollster",
+ "rand",
  "tobj",
  "wgpu",
  "wgpu-types",

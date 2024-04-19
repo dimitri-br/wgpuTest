@@ -152,7 +152,7 @@ impl RenderNode {
                         || panic!("Mesh with id {} not found", mesh_id)
                     );
 
-                    mesh.set_instances(instance_buffer);
+                    mesh.set_instances(&self._device.clone(), instance_buffer);
                 }
                 _ => {}
             }

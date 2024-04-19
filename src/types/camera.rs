@@ -64,9 +64,8 @@ impl Camera{
 
     }
 
-    pub fn resize(&mut self, surface: MutHandle<wgpu::SurfaceConfiguration>){
-        let surface = surface.lock().unwrap();
-        self.aspect = surface.width as f32 / surface.height as f32;
+    pub fn resize(&mut self, size: winit::dpi::PhysicalSize<u32>){
+        self.aspect = size.width as f32 / size.height as f32;
         self.update();
     }
 
@@ -79,10 +78,10 @@ impl Camera{
 
     pub fn move_rotation(&mut self, delta: nalgebra::Vector3<f32>){
         // Limit the rotation to avoid gimbal lock
-        if self.rotation[1] + delta[1] > 90.0{
-            self.rotation[1] = 90.0;
-        }else if self.rotation[1] + delta[1] < -90.0{
-            self.rotation[1] = -90.0;
+        if self.rotation[1] + delta[1] > 89.9{
+            self.rotation[1] = 89.9;
+        }else if self.rotation[1] + delta[1] < -89.9{
+            self.rotation[1] = -89.9;
         }else{
             self.rotation += delta;
         }
@@ -120,10 +119,6 @@ pub struct CameraUniform{
 
 impl CameraUniform{
     pub fn new(camera: &Camera) -> Self{
-
-        info!("Camera position: {:?}", camera.position);
-        info!("Camera rotation: {:?}", camera.rotation);
-
         let view = nalgebra::Matrix4::look_at_rh(&camera.position.into(), &(camera.position + camera.forward).into(), &camera.up.into());
 
         let proj = nalgebra::Perspective3::new(camera.aspect, camera.fov.to_radians(), camera.near, camera.far).into_inner();
