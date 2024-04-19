@@ -22,7 +22,7 @@ pub struct Renderer {
     render_graph: RenderGraph,
     resource_manager: ResourceManager,
 
-    last_frame: std::time::Instant,
+    pub last_frame: std::time::Instant,
 }
 
 impl Renderer {
@@ -95,7 +95,13 @@ impl Renderer {
         // Handle rendering events here
         match event {
             Event::AboutToWait => {
-                // Continue rendering!
+                // Application update code.
+    
+                // Queue a RedrawRequested event.
+                //
+                // You only need to call this if you've determined that you need to redraw in
+                // applications which do not always need to. Applications that redraw continuously
+                // can render here instead.
                 self.window.request_redraw();
             },
             Event::WindowEvent { event, .. } => {
@@ -114,6 +120,8 @@ impl Renderer {
             }
             _ => {}
         }
+
+        //self.window.request_redraw();
     }
 
     pub fn render(&mut self) {
@@ -137,6 +145,9 @@ impl Renderer {
 
         // Submit the render pass
         self.device_handler.submit_command_encoder(encoder);
+
+        // Alert the window that the frame is ready
+        self.window.pre_present_notify();
 
         // Present the frame
         frame.present();
