@@ -93,6 +93,7 @@ fn vert_main(model: VertexInput) -> VertexOutput {
     // Apply transformations
     out.clip_position =  perspective * fullModelMatrix * vec4<f32>(model.position, 1.0);
     out.normal = normalize((modelMatrix * vec4<f32>(model.normal, 0.0)).xyz);
+    out.tex_coords = model.tex_coords;
 
     return out;
 }
@@ -141,6 +142,14 @@ fn saturation(color: vec3<f32>, value: f32) -> vec3<f32> {
     return vec3<f32>(average) + (color - vec3<f32>(average)) * value;
 }
 
+
+// Texture and sampler
+@group(1) @binding(0)
+var t_diffuse: texture_2d<f32>;
+@group(1) @binding(1)
+var s_diffuse: sampler;
+
+
 @fragment
 fn frag_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // Simple directional light
@@ -161,6 +170,10 @@ fn frag_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     // Apply filters
     var final_color = adjusted_color;
+
+    // Apply texture
+    let tex_color = textureSample(t_diffuse, s_diffuse, in.tex_coords);
+    final_color *= tex_color.rgb;
 
     return vec4<f32>(aces_tonemapping(final_color), 1.0);
 }

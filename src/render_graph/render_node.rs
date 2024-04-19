@@ -90,6 +90,15 @@ impl RenderNode {
         let mut bind_group_layouts = Vec::new();
         let mut vertex_buffer_layouts = vec![Vertex::desc()];
 
+        // Get our bind group layouts from our uniform sets
+        if let Some(static_uniform_set) = &self.static_uniform_set {
+            bind_group_layouts.push(&static_uniform_set.bind_group_layout);
+        }
+
+        if let Some(dynamic_uniform_set) = &self.dynamic_uniform_set {
+            bind_group_layouts.push(&dynamic_uniform_set.bind_group_layout);
+        }
+
         // Load all textures and meshes
         for command in self.commands.iter(){
             match command{
@@ -143,21 +152,13 @@ impl RenderNode {
                 Command::BindTexture(_, texture_id) => {
                     // Load the texture
                     let texture = resource_manager.get_texture(texture_id.clone());
+                    println!("Loading texture: {:?}", texture_id);
                     if let Some(texture) = texture {
                         bind_group_layouts.push(texture.get_bind_group_layout());
                     }
                 }
                 _ => {}
             }
-        }
-
-        // Get our bind group layouts from our uniform sets
-        if let Some(static_uniform_set) = &self.static_uniform_set {
-            bind_group_layouts.push(&static_uniform_set.bind_group_layout);
-        }
-
-        if let Some(dynamic_uniform_set) = &self.dynamic_uniform_set {
-            bind_group_layouts.push(&dynamic_uniform_set.bind_group_layout);
         }
 
         let pipeline = Pipeline::new(self._device.clone(), shader_module.unwrap(),

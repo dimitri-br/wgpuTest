@@ -31,6 +31,11 @@ fn main() {
     };
 
     let transform_buffer = render_node.add_uniform_buffer(transform, minirender::UniformBufferType::STATIC);
+
+    render_node.add_command(
+        Command::BindTexture(1, "examples/textures/cube.jpeg".to_string())
+    );
+
     render_node.add_command(
         Command::DrawMesh("examples/meshes/cube obj.obj".to_string())
     );
@@ -51,16 +56,20 @@ fn main() {
     // Generate a bunch of cubes in a grid
     for x in -25..25 {
         for y in -25..25 {
-            for z in -75..-15 {
+            for z in -75..-10 {
                 let transform = Transform{
                     position: [x as f32, y as f32, z as f32, 0.0],
                     rotation: [0.0, 0.0, 0.0, 0.0],
-                    scale: [0.1, 0.1, 0.1, 0.0],
+                    scale: [0.25, 0.25, 0.25, 0.0],
                 };
                 transforms.push(transform);
             }
         }
     }
+
+    instanced_render_node.add_command(
+        Command::BindTexture(0, "examples/textures/instance.png".to_string())
+    );
 
     instanced_render_node.add_command(
         Command::DrawMeshInstanced("examples/meshes/cube obj.obj".to_string(), transforms.len() as u32, transforms)
