@@ -9,8 +9,7 @@ pub struct InstanceHandler {
 
 impl InstanceHandler {
     pub fn new() -> Self {
-        //let backends = wgpu::util::backend_bits_from_env().unwrap_or_default();
-        let backends = wgpu::Backends::VULKAN;
+        let backends = wgpu::util::backend_bits_from_env().unwrap_or_default();
         let dx12_shader_compiler = wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default();
         let gles_minor_version = wgpu::util::gles_minor_version_from_env().unwrap_or_default();
         let instance = Instance::new(wgpu::InstanceDescriptor {

@@ -28,8 +28,8 @@ impl RenderGraph{
     }
 
     pub fn execute(&self, texture_view: &wgpu::TextureView, resource_manager: &mut ResourceManager, encoder: &mut wgpu::CommandEncoder){
-        for node in self.nodes.iter(){
-            node.execute(texture_view, resource_manager, encoder);
+        for (id, node) in self.nodes.iter().enumerate(){
+            node.execute(id, texture_view, resource_manager, encoder);
         }
     }
 }

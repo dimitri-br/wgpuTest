@@ -5,74 +5,31 @@ struct VertexInput {
 };
 
 struct InstanceInput{
-    @location(3) position: vec3<f32>,
-    @location(4) rotation: vec3<f32>,
-    @location(5) scale: vec3<f32>,
+    @builtin(instance_index) instance_index: u32,
+    @location(3) model_matrix_0: vec4<f32>,
+    @location(4) model_matrix_1: vec4<f32>,
+    @location(5) model_matrix_2: vec4<f32>,
+    @location(6) model_matrix_3: vec4<f32>,
 };
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) normal: vec3<f32>,
+    @location(1) tex_coords: vec2<f32>,
+    @location(2) instance_color: vec3<f32>,
 };
 
 @vertex
 fn vert_main(model: VertexInput, inst: InstanceInput) -> VertexOutput {
     var out: VertexOutput;
 
-    let transform = inst;
-
-    // Create rotation matrix from Euler angles
-    let cosX = cos(transform.rotation.x);
-    let sinX = sin(transform.rotation.x);
-    let cosY = cos(transform.rotation.y);
-    let sinY = sin(transform.rotation.y);
-    let cosZ = cos(transform.rotation.z);
-    let sinZ = sin(transform.rotation.z);
-
-    let rotationX = mat4x4<f32>(
-        vec4<f32>(1.0, 0.0, 0.0, 0.0),
-        vec4<f32>(0.0, cosX, -sinX, 0.0),
-        vec4<f32>(0.0, sinX, cosX, 0.0),
-        vec4<f32>(0.0, 0.0, 0.0, 1.0)
+    // Build a transformation matrix from the instance input
+    let modelMatrix = mat4x4<f32>(
+        vec4<f32>(inst.model_matrix_0.x, inst.model_matrix_0.y, inst.model_matrix_0.z, inst.model_matrix_0.w),
+        vec4<f32>(inst.model_matrix_1.x, inst.model_matrix_1.y, inst.model_matrix_1.z, inst.model_matrix_1.w),
+        vec4<f32>(inst.model_matrix_2.x, inst.model_matrix_2.y, inst.model_matrix_2.z, inst.model_matrix_2.w),
+        vec4<f32>(inst.model_matrix_3.x, inst.model_matrix_3.y, inst.model_matrix_3.z, inst.model_matrix_3.w)
     );
-
-    let rotationY = mat4x4<f32>(
-        vec4<f32>(cosY, 0.0, sinY, 0.0),
-        vec4<f32>(0.0, 1.0, 0.0, 0.0),
-        vec4<f32>(-sinY, 0.0, cosY, 0.0),
-        vec4<f32>(0.0, 0.0, 0.0, 1.0)
-    );
-
-    let rotationZ = mat4x4<f32>(
-        vec4<f32>(cosZ, -sinZ, 0.0, 0.0),
-        vec4<f32>(sinZ, cosZ, 0.0, 0.0),
-        vec4<f32>(0.0, 0.0, 1.0, 0.0),
-        vec4<f32>(0.0, 0.0, 0.0, 1.0)
-    );
-
-    let rotation = rotationZ * rotationY * rotationX;
-
-    // Apply scale
-    let scaleMatrix = mat4x4<f32>(
-        vec4<f32>(transform.scale.x, 0.0, 0.0, 0.0),
-        vec4<f32>(0.0, transform.scale.y, 0.0, 0.0),
-        vec4<f32>(0.0, 0.0, transform.scale.z, 0.0),
-        vec4<f32>(0.0, 0.0, 0.0, 1.0)
-    );
-
-    // Combine rotation and scale
-    let modelMatrix = scaleMatrix * rotation;
-
-    // Translation
-    let translation = mat4x4<f32>(
-        vec4<f32>(1.0, 0.0, 0.0, 0.0),
-        vec4<f32>(0.0, 1.0, 0.0, 0.0),
-        vec4<f32>(0.0, 0.0, 1.0, 0.0),
-        vec4<f32>(transform.position.x, transform.position.y, transform.position.z, 1.0)
-    );
-
-    // Full model transformation matrix
-    let fullModelMatrix = translation * modelMatrix;
 
 
         // Define the perspective projection matrix for window size 1600x1200
@@ -89,8 +46,12 @@ fn vert_main(model: VertexInput, inst: InstanceInput) -> VertexOutput {
         );
 
     // Apply transformations
-    out.clip_position =  perspective * fullModelMatrix * vec4<f32>(model.position, 1.0);
+    out.clip_position =  perspective * modelMatrix * vec4<f32>(model.position, 1.0);
     out.normal = normalize((modelMatrix * vec4<f32>(model.normal, 0.0)).xyz);
+
+    // use instance_index (built-in) to determine the index
+    var color = vec3<f32>(sin(f32(inst.instance_index)), cos(f32(inst.instance_index)), 0.5);
+    out.instance_color = color;
 
     return out;
 }
@@ -150,9 +111,7 @@ fn frag_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let normal = normalize(in.normal);
     let light_intensity = max(dot(normal, light_dir), 0.0);
 
-    let color = vec3<f32>(
-        1.0, 1.0, 1.0
-    );
+    let color = in.instance_color;
 
 
     let adjusted_color = vec3<f32>((ambient_color + light_intensity * light_color) * color);

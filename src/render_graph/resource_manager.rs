@@ -1,9 +1,10 @@
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use wgpu::util::DeviceExt;
 use crate::{Handle, MutHandle};
 
-use crate::types::{Mesh, Texture};
+use crate::types::{Instance, Mesh, Texture};
 
 type ResourceID = String;
 
@@ -65,8 +66,8 @@ impl ResourceManager{
     pub fn load_depth_texture(&mut self) -> MutHandle<Texture>{
         if self.depth_texture.is_some(){
 
-            let mut isWidth = false;
-            let mut isHeight = true;
+            let mut is_width = false;
+            let mut is_height = false;
 
             // Define a closure to check if the depth texture has the same size as the surface configuration
             {
@@ -79,12 +80,12 @@ impl ResourceManager{
                     .lock().unwrap()
                     .get_texture_size();
 
-                isWidth = texture_size.width == surface_config.width;
-                isHeight = texture_size.height == surface_config.height;
+                is_width = texture_size.width == surface_config.width;
+                is_height = texture_size.height == surface_config.height;
             }
 
             // Check if the depth texture has the same size as the surface configuration
-            if !isWidth || !isHeight{
+            if !is_width || !is_height {
                 self.depth_texture.as_ref().unwrap()
                     .lock().unwrap()
                     .resize_screen_texture(&self.device, self.surface_configuration.clone());
@@ -99,8 +100,24 @@ impl ResourceManager{
         self.depth_texture.as_ref().unwrap().clone()
     }
 
+    pub fn build_instance_buffer(&self, instances: &[Instance]) -> wgpu::Buffer{
+        let instance_data = bytemuck::cast_slice(instances.iter().as_slice());
+
+        self.device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor{
+                label: Some("Instance Buffer"),
+                contents: instance_data,
+                usage: wgpu::BufferUsages::VERTEX
+            }
+        )
+    }
+
     pub fn get_mesh(&self, id: ResourceID) -> Option<&Mesh>{
         self.meshes.get(&id)
+    }
+
+    pub fn get_mesh_mut(&mut self, id: ResourceID) -> Option<&mut Mesh>{
+        self.meshes.get_mut(&id)
     }
 
     pub fn get_texture(&self, id: ResourceID) -> Option<&Texture>{

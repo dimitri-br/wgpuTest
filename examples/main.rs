@@ -1,14 +1,6 @@
 use log::info;
 use winit::event_loop::ControlFlow;
-use minirender::{Renderer, Command};
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct Transform{
-    pub position: [f32; 4],
-    pub rotation: [f32; 4],
-    pub scale: [f32; 4],
-}
+use minirender::{Renderer, Command, Transform};
 
 
 fn main() {
@@ -48,7 +40,33 @@ fn main() {
 
     renderer.add_render_node(render_node);
 
-    let instanced_render_node = renderer.get_render_node("Instanced Cube".to_string());
+    let mut instanced_render_node = renderer.get_render_node("Instanced Cube".to_string());
+    instanced_render_node.use_depth(true);
+
+    instanced_render_node.add_command(
+        Command::LoadShader("examples/shaders/hello_inst.wgsl".to_string())
+    );
+
+    let mut transforms = Vec::new();
+    // Generate a bunch of cubes in a grid
+    for x in -25..25 {
+        for y in -25..25 {
+            for z in -75..-15 {
+                let transform = Transform{
+                    position: [x as f32, y as f32, z as f32, 0.0],
+                    rotation: [0.0, 0.0, 0.0, 0.0],
+                    scale: [0.1, 0.1, 0.1, 0.0],
+                };
+                transforms.push(transform);
+            }
+        }
+    }
+
+    instanced_render_node.add_command(
+        Command::DrawMeshInstanced("examples/meshes/cube obj.obj".to_string(), transforms.len() as u32, transforms)
+    );
+
+    renderer.add_render_node(instanced_render_node);
 
     // Once this is run, all the render nodes will be built and the pipeline will be created
     renderer.initialize();

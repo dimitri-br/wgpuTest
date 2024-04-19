@@ -55,10 +55,13 @@ pub struct Pipeline{
 }
 
 impl Pipeline{
-    pub fn new(device: Handle<wgpu::Device>, shader: wgpu::ShaderModule, bind_group_layouts: Vec<&wgpu::BindGroupLayout>, use_depth: bool) -> Self{
+    pub fn new(device: Handle<wgpu::Device>, shader: wgpu::ShaderModule,
+               bind_group_layouts: Vec<&wgpu::BindGroupLayout>,
+               vertex_buffer_layouts: Vec<wgpu::VertexBufferLayout>, use_depth: bool) -> Self{
         let layout = Self::create_layout(device.clone(), bind_group_layouts);
 
-        let pipeline = Self::create_pipeline(device.clone(), layout, shader, use_depth);
+        let pipeline = Self::create_pipeline(device.clone(), layout, shader,
+                                             vertex_buffer_layouts, use_depth);
 
         Self{
             pipeline
@@ -78,7 +81,9 @@ impl Pipeline{
     }
 
     fn create_pipeline(device: Handle<wgpu::Device>, layout: wgpu::PipelineLayout,
-                       shader: wgpu::ShaderModule, use_depth: bool) -> wgpu::RenderPipeline{
+                       shader: wgpu::ShaderModule,
+                       vertex_buffer_layouts: Vec<wgpu::VertexBufferLayout>,
+                       use_depth: bool) -> wgpu::RenderPipeline{
 
         let mut pipeline_settings = PipelineSettings::default();
 
@@ -92,9 +97,7 @@ impl Pipeline{
             vertex: wgpu::VertexState{
                 module: &shader,
                 entry_point: "vert_main",
-                buffers: &[
-                    crate::types::Vertex::desc()
-                ],
+                buffers: &vertex_buffer_layouts,
             },
             fragment: Some(wgpu::FragmentState{
                 module: &shader,

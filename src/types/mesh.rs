@@ -3,7 +3,8 @@ use wgpu::util::DeviceExt;
 
 pub struct Mesh {
     submeshes: Vec<Submesh>,
-    instances: Option<Vec<Instance>>
+    instances: Option<Vec<Instance>>,
+    instance_buffer: Option<wgpu::Buffer>
 }
 
 impl Mesh {
@@ -69,7 +70,8 @@ impl Mesh {
 
         Self {
             submeshes,
-            instances: None
+            instances: None,
+            instance_buffer: None
         }
     }
 
@@ -79,17 +81,29 @@ impl Mesh {
 
         Self {
             submeshes: vec![submesh],
-            instances: None
+            instances: None,
+            instance_buffer: None
         }
     }
 
-    pub fn set_instances(&mut self, instances: Vec<Instance>) {
+    pub fn set_instances(&mut self, instances: Vec<Instance>, instance_buffer: wgpu::Buffer) {
         self.instances = Some(instances);
+        self.instance_buffer = Some(instance_buffer);
     }
 
     pub fn render<'a>(&'a self, render_pass: &mut wgpu::RenderPass<'a>) {
         for submesh in self.submeshes.iter() {
             submesh.render(render_pass);
+        }
+    }
+
+    pub fn render_instanced<'a>(&'a self, render_pass: &mut wgpu::RenderPass<'a>){
+        if let Some(instances) = &self.instances{
+            let instance_buffer = self.instance_buffer.as_ref().unwrap();
+
+            for submesh in self.submeshes.iter(){
+                submesh.render_instanced(render_pass, &instance_buffer, instances.len() as u32);
+            }
         }
     }
 }
@@ -125,5 +139,12 @@ impl Submesh {
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
+    }
+
+    pub fn render_instanced<'a>(&'a self, render_pass: &mut wgpu::RenderPass<'a>, instance_buffer: &'a wgpu::Buffer, count: u32){
+        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+        render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+        render_pass.set_vertex_buffer(1, instance_buffer.slice(..));
+        render_pass.draw_indexed(0..self.num_indices, 0, 0..count);
     }
 }

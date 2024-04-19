@@ -7,7 +7,7 @@ use std::io::{Read, Write};
 use std::sync::Arc;
 use wgpu::include_spirv;
 use crate::render_graph::ResourceManager;
-use crate::types::{UniformBuffer, UniformBufferType, UniformSet};
+use crate::types::{Instance, UniformBuffer, UniformBufferType, UniformSet, Vertex};
 
 pub struct RenderNode {
     pub name: String,
@@ -88,6 +88,7 @@ impl RenderNode {
     pub(super) fn build_pipeline(&mut self, resource_manager: &mut ResourceManager) {
         let mut shader_module = None;
         let mut bind_group_layouts = Vec::new();
+        let mut vertex_buffer_layouts = vec![Vertex::desc()];
 
         // Load all textures and meshes
         for command in self.commands.iter(){
@@ -98,6 +99,26 @@ impl RenderNode {
                 Command::DrawMesh(mesh_id) => {
                     // Load the mesh
                     resource_manager.load_mesh(mesh_id.clone(), mesh_id);
+                }
+                Command::DrawMeshInstanced(mesh_id, _, transform_instances) => {
+                    // add vertex_buffer_layouts.push(Instance::desc()); if it doesn't already exist
+                    if !vertex_buffer_layouts.contains(&Instance::desc()) {
+                        vertex_buffer_layouts.push(Instance::desc());
+                    }
+
+                    // Load the mesh
+                    resource_manager.load_mesh(mesh_id.clone(), mesh_id);
+
+                    // Convert the transform instances to instances
+                    let instances: Vec<Instance> = transform_instances.iter().map(|transform| transform.to_instance()).collect();
+
+                    let buffer = resource_manager.build_instance_buffer(&instances);
+
+                    let mesh = resource_manager.get_mesh_mut(mesh_id.clone()).unwrap_or_else(
+                        || panic!("Mesh with id {} not found", mesh_id)
+                    );
+
+                    mesh.set_instances(instances, buffer);
                 }
                 _ => {}
             }
@@ -140,12 +161,12 @@ impl RenderNode {
         }
 
         let pipeline = Pipeline::new(self._device.clone(), shader_module.unwrap(),
-                                     bind_group_layouts, self.use_depth);
+                                     bind_group_layouts, vertex_buffer_layouts, self.use_depth);
 
         self.pipeline = Some(pipeline);
     }
 
-    pub(super) fn execute(&self, texture_view: &wgpu::TextureView,
+    pub(super) fn execute(&self, id: usize, texture_view: &wgpu::TextureView,
                           resource_manager: &mut ResourceManager, encoder: &mut wgpu::CommandEncoder) {
         if let Some(pipeline) = &self.pipeline {
 
@@ -159,7 +180,12 @@ impl RenderNode {
                     view: texture_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        // Only clear if we're the first node in the render graph
+                        load: if id == 0 {
+                            wgpu::LoadOp::Clear(wgpu::Color::BLACK)
+                        } else {
+                            wgpu::LoadOp::Load
+                        },
                         store: wgpu::StoreOp::Store,
                     },
                 })],
@@ -167,7 +193,11 @@ impl RenderNode {
                     Some(wgpu::RenderPassDepthStencilAttachment {
                         view: &depth_texture_locked.view,
                         depth_ops: Some(wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(1.0),
+                            load: if id == 0 {
+                                wgpu::LoadOp::Clear(1.0)
+                            } else {
+                                wgpu::LoadOp::Load
+                            },
                             store: wgpu::StoreOp::Store,
                         }),
                         stencil_ops: None,
@@ -206,7 +236,7 @@ impl RenderNode {
                         let mesh = resource_manager.get_mesh(mesh_id.clone());
 
                         if let Some(mesh) = mesh {
-                            mesh.render_instanced(&mut render_pass, *count);
+                            mesh.render_instanced(&mut render_pass);
                         }
                     }
                     Command::BindTexture(index, texture_id) => {
