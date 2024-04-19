@@ -19,6 +19,14 @@ struct VertexOutput {
     @location(2) instance_color: vec3<f32>,
 };
 
+struct Camera{
+    proj_view: mat4x4<f32>,
+}
+
+@group(0) @binding(0)
+var<uniform> camera: Camera;
+
+
 @vertex
 fn vert_main(model: VertexInput, inst: InstanceInput) -> VertexOutput {
     var out: VertexOutput;
@@ -32,21 +40,8 @@ fn vert_main(model: VertexInput, inst: InstanceInput) -> VertexOutput {
     );
 
 
-        // Define the perspective projection matrix for window size 1600x1200
-        let fov: f32 = 1.0 / tan(0.7854 / 2.0);  // 45 degrees field of view
-        let aspect_ratio: f32 = 1600.0 / 1200.0;  // Aspect ratio calculated from window dimensions
-        let zNear: f32 = 0.1;
-        let zFar: f32 = 100.0;
-        let zRange: f32 = zNear - zFar;
-        let perspective = mat4x4<f32>(
-            vec4<f32>(fov / aspect_ratio, 0.0, 0.0, 0.0),
-            vec4<f32>(0.0, fov, 0.0, 0.0),
-            vec4<f32>(0.0, 0.0, (zFar + zNear) / zRange, -1.0),
-            vec4<f32>(0.0, 0.0, (2.0 * zFar * zNear) / zRange, 0.0)
-        );
-
     // Apply transformations
-    out.clip_position =  perspective * modelMatrix * vec4<f32>(model.position, 1.0);
+    out.clip_position =  camera.proj_view * modelMatrix * vec4<f32>(model.position, 1.0);
     out.normal = normalize((modelMatrix * vec4<f32>(model.normal, 0.0)).xyz);
     out.tex_coords = model.tex_coords;
 
@@ -102,9 +97,9 @@ fn saturation(color: vec3<f32>, value: f32) -> vec3<f32> {
 }
 
 // Texture and sampler
-@group(0) @binding(0)
+@group(1) @binding(0)
 var t_diffuse: texture_2d<f32>;
-@group(0) @binding(1)
+@group(1) @binding(1)
 var s_diffuse: sampler;
 
 @fragment

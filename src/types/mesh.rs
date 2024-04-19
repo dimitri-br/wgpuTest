@@ -1,10 +1,11 @@
 use crate::types::{Instance, Vertex};
 use wgpu::util::DeviceExt;
 
+use super::InstanceBuffer;
+
 pub struct Mesh {
     submeshes: Vec<Submesh>,
-    instances: Option<Vec<Instance>>,
-    instance_buffer: Option<wgpu::Buffer>
+    instance_buffer: Option<InstanceBuffer>
 }
 
 impl Mesh {
@@ -70,7 +71,6 @@ impl Mesh {
 
         Self {
             submeshes,
-            instances: None,
             instance_buffer: None
         }
     }
@@ -81,13 +81,11 @@ impl Mesh {
 
         Self {
             submeshes: vec![submesh],
-            instances: None,
             instance_buffer: None
         }
     }
 
-    pub fn set_instances(&mut self, instances: Vec<Instance>, instance_buffer: wgpu::Buffer) {
-        self.instances = Some(instances);
+    pub fn set_instances(&mut self, instance_buffer: InstanceBuffer) {
         self.instance_buffer = Some(instance_buffer);
     }
 
@@ -98,11 +96,9 @@ impl Mesh {
     }
 
     pub fn render_instanced<'a>(&'a self, render_pass: &mut wgpu::RenderPass<'a>){
-        if let Some(instances) = &self.instances{
-            let instance_buffer = self.instance_buffer.as_ref().unwrap();
-
+        if let Some(ib) = &self.instance_buffer{
             for submesh in self.submeshes.iter(){
-                submesh.render_instanced(render_pass, &instance_buffer, instances.len() as u32);
+                submesh.render_instanced(render_pass, &ib);
             }
         }
     }
@@ -141,10 +137,10 @@ impl Submesh {
         render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
     }
 
-    pub fn render_instanced<'a>(&'a self, render_pass: &mut wgpu::RenderPass<'a>, instance_buffer: &'a wgpu::Buffer, count: u32){
+    pub fn render_instanced<'a>(&'a self, render_pass: &mut wgpu::RenderPass<'a>, instance_buffer: &'a InstanceBuffer){
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-        render_pass.set_vertex_buffer(1, instance_buffer.slice(..));
-        render_pass.draw_indexed(0..self.num_indices, 0, 0..count);
+        instance_buffer.bind_as_buffer(1, render_pass);
+        render_pass.draw_indexed(0..self.num_indices, 0, 0..instance_buffer.get_instance_count() as u32);
     }
 }

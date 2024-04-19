@@ -1,10 +1,11 @@
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use log::info;
 use wgpu::util::DeviceExt;
 use crate::{Handle, MutHandle};
 
-use crate::types::{Instance, Mesh, Texture};
+use crate::types::{Instance, InstanceBuffer, Mesh, Texture};
 
 type ResourceID = String;
 
@@ -47,6 +48,8 @@ impl ResourceManager{
         let mesh = Mesh::load_from_file(&self.device, path);
         self.meshes.insert(id.clone(), mesh);
 
+        info!("Loaded mesh: {:?}", id);
+
         self.meshes.get(&id)
     }
 
@@ -60,19 +63,20 @@ impl ResourceManager{
         let texture = Texture::load_from_path(&self.device, &self.queue, path);
         self.textures.insert(id.clone(), texture);
 
+        info!("Loaded texture: {:?}", id);
+
         self.textures.get(&id)
     }
 
     pub fn load_depth_texture(&mut self) -> MutHandle<Texture>{
         if self.depth_texture.is_some(){
 
-            let mut is_width = false;
-            let mut is_height = false;
+            let is_width ;
+            let is_height ;
 
             // Define a closure to check if the depth texture has the same size as the surface configuration
             {
                 let surface_config = self.surface_configuration.clone();
-
                 let surface_config = surface_config.lock().unwrap();
 
                 let texture_size = self.depth_texture
@@ -95,21 +99,13 @@ impl ResourceManager{
         }
 
         let texture = Texture::create_depth_texture(&self.device, self.surface_configuration.clone());
-        self.depth_texture = Some(Arc::new(Mutex::new(texture)));
+        self.depth_texture = Some(MutHandle::new(texture));
 
         self.depth_texture.as_ref().unwrap().clone()
     }
 
-    pub fn build_instance_buffer(&self, instances: &[Instance]) -> wgpu::Buffer{
-        let instance_data = bytemuck::cast_slice(instances.iter().as_slice());
-
-        self.device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor{
-                label: Some("Instance Buffer"),
-                contents: instance_data,
-                usage: wgpu::BufferUsages::VERTEX
-            }
-        )
+    pub fn build_instance_buffer(&self, instances: &[Instance]) -> InstanceBuffer{
+        InstanceBuffer::new(&self.device, instances.to_vec())
     }
 
     pub fn get_mesh(&self, id: ResourceID) -> Option<&Mesh>{

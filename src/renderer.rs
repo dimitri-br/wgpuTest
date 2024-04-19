@@ -1,10 +1,11 @@
 use crate::surface_wrapper::SurfaceWrapper;
-use crate::Handle;
+use crate::{Handle, MutHandle};
 use crate::render_graph::{RenderGraph, RenderNode};
 use crate::device_handler::DeviceHandler;
 use crate::instance_handler::InstanceHandler;
 use anyhow::Result;
 use log::info;
+use winit::window::CursorGrabMode;
 use std::sync::Arc;
 use winit::dpi::PhysicalSize;
 use winit::event::{Event, WindowEvent};
@@ -42,7 +43,7 @@ impl Renderer {
 
         info!("Initializing renderer");
 
-        let window = Arc::new(_window); // Store the window in an Arc to ensure it is not dropped
+        let window = Handle::new(_window); // Store the window in an Arc to ensure it is not dropped
         let size = window.inner_size();
 
         let instance_handler = InstanceHandler::new();
@@ -83,6 +84,12 @@ impl Renderer {
 
     pub fn initialize(&mut self) {
         self.render_graph.build(&mut self.resource_manager);
+
+        // Lock the cursor
+        self.window.set_cursor_grab(CursorGrabMode::Confined)
+            .or_else(|_e| self.window.set_cursor_grab(CursorGrabMode::Locked))
+            .unwrap();
+        self.window.set_cursor_visible(false);
     }
 
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
@@ -152,8 +159,8 @@ impl Renderer {
         // Present the frame
         frame.present();
 
-        info!("FrameTime: {:?}", self.last_frame.elapsed());
-        info!("FPS: {:?}", 1.0 / self.last_frame.elapsed().as_secs_f32());
+        //info!("FrameTime: {:?}", self.last_frame.elapsed());
+        //info!("FPS: {:?}", 1.0 / self.last_frame.elapsed().as_secs_f32());
         self.last_frame = std::time::Instant::now();
     }
 
@@ -164,4 +171,8 @@ impl Renderer {
     pub fn add_render_node(&mut self, node: RenderNode) {
         self.render_graph.add_node(node);
     }
-}
+
+    pub fn get_surface_configuration(&self) -> MutHandle<wgpu::SurfaceConfiguration> {
+        self.surface_wrapper.get_configuration()
+    }
+}  

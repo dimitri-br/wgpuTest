@@ -20,7 +20,7 @@ impl InstanceHandler {
         });
 
         Self {
-            instance: Arc::new(instance),
+            instance: Handle::new(instance),
         }
     }
 

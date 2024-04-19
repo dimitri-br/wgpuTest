@@ -43,9 +43,9 @@ impl DeviceHandler {
         });
 
         Self {
-            adapter: Arc::new(adapter),
-            device: Arc::new(device),
-            queue: Arc::new(queue),
+            adapter: Handle::new(adapter),
+            device: Handle::new(device),
+            queue: Handle::new(queue),
         }
     }
 

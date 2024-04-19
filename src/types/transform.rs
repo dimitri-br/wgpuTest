@@ -1,19 +1,22 @@
+use encase::ShaderType;
+
 use crate::types::Instance;
 
-#[repr(C)]
-#[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+use super::Uniform;
+
+#[derive(Debug, Clone, Copy)]
 pub struct Transform{
-    pub position: [f32; 4],
-    pub rotation: [f32; 4],
-    pub scale: [f32; 4],
+    pub position: nalgebra::Vector3<f32>,
+    pub rotation: nalgebra::Vector3<f32>,
+    pub scale: nalgebra::Vector3<f32>,
 }
 
 impl Transform{
-    pub fn new(position: [f32; 3], rotation: [f32; 3], scale: [f32; 3]) -> Self{
+    pub fn new(position: nalgebra::Vector3<f32>, rotation: nalgebra::Vector3<f32>, scale: nalgebra::Vector3<f32>) -> Self{
         Self{
-            position: [position[0], position[1], position[2], 0.0],
-            rotation: [rotation[0], rotation[1], rotation[2], 0.0],
-            scale: [scale[0], scale[1], scale[2], 0.0],
+            position,
+            rotation,
+            scale,
         }
     }
 
@@ -29,5 +32,26 @@ impl Transform{
         matrix *= nalgebra::Matrix4::from_euler_angles(self.rotation[0], self.rotation[1], self.rotation[2]);
         matrix *= nalgebra::Matrix4::new_nonuniform_scaling(&nalgebra::Vector3::new(self.scale[0], self.scale[1], self.scale[2]));
         matrix.into()
+    }
+}
+
+impl Uniform for Transform{
+    fn to_wgpu(&self) -> Vec<u8>{
+        let mut buffer = encase::UniformBuffer::new(Vec::new());
+        buffer.write(&TransformUniform::new(self)).unwrap();
+        buffer.into_inner()
+    }
+}
+
+#[derive(Debug, Clone, Copy, ShaderType)]
+pub struct TransformUniform{
+    pub model: nalgebra::Matrix4<f32>,
+}
+
+impl TransformUniform{
+    pub fn new(transform: &Transform) -> Self{
+        Self{
+            model: transform.to_matrix().into(),
+        }
     }
 }

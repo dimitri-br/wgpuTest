@@ -1,3 +1,4 @@
+use std::num::NonZeroU64;
 use std::sync::Arc;
 use wgpu::{BindGroup, BindGroupLayout};
 use crate::{Handle};
@@ -30,6 +31,7 @@ impl UniformSet{
         let mut bind_group_layout_entries = Vec::new();
         let mut bind_group_entries = Vec::new();
 
+
         for (i, uniform_buffer) in uniform_buffers.iter().enumerate(){
             bind_group_layout_entries.push(wgpu::BindGroupLayoutEntry{
                 binding: i as u32,
@@ -37,7 +39,7 @@ impl UniformSet{
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Uniform,
                     has_dynamic_offset: false,
-                    min_binding_size: None
+                    min_binding_size: NonZeroU64::new(uniform_buffer.size as u64)
                 },
                 count: None
             });
@@ -47,7 +49,7 @@ impl UniformSet{
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding{
                     buffer: &uniform_buffer.buffer,
                     offset: 0,
-                    size: None
+                    size: NonZeroU64::new(uniform_buffer.size as u64)
                 })
             });
         }
@@ -71,12 +73,16 @@ impl UniformSet{
     }
 
     pub fn add_uniform_buffer(&mut self, device: &wgpu::Device, uniform_buffer: UniformBuffer){
-        self.uniform_buffers.push(Arc::new(uniform_buffer));
+        self.uniform_buffers.push(Handle::new(uniform_buffer));
 
         let (bind_group_layout, bind_group) = Self::create_bind_groups(device, &self.uniform_buffers);
 
         self.bind_group_layout = bind_group_layout;
         self.bind_group = bind_group;
+    }
+
+    pub fn add_existing_uniform_buffer(&mut self, uniform_buffer: Handle<UniformBuffer>){
+        self.uniform_buffers.push(uniform_buffer);
     }
 
     pub fn bind<'a>(&'a self, index: u32, render_pass: &mut wgpu::RenderPass<'a>){

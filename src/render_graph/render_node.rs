@@ -5,9 +5,11 @@ use crate::pipeline::Pipeline;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::sync::Arc;
+use encase::internal::WriteInto;
+use encase::ShaderType;
 use wgpu::include_spirv;
 use crate::render_graph::ResourceManager;
-use crate::types::{Instance, UniformBuffer, UniformBufferType, UniformSet, Vertex};
+use crate::types::{Instance, Uniform, UniformBuffer, UniformBufferType, UniformSet, Vertex};
 
 pub struct RenderNode {
     pub name: String,
@@ -49,7 +51,7 @@ impl RenderNode {
         self.use_depth = use_depth;
     }
 
-    pub fn add_uniform_buffer<T: bytemuck::Pod>(&mut self, data: T, buffer: UniformBufferType) -> Option<Handle<UniformBuffer>> {
+    pub fn add_uniform_buffer<T: Uniform>(&mut self, data: &T, buffer: UniformBufferType) -> Option<Handle<UniformBuffer>> {
         let mut dynamic_uniform_buffer = None;
 
         match buffer {
@@ -59,7 +61,7 @@ impl RenderNode {
                     static_uniform_set.add_uniform_buffer(&self._device, uniform_buffer);
                 } else {
                     let uniform_buffer = UniformBuffer::new(self._device.clone(), self._queue.clone(), data);
-                    let uniform_buffer = Arc::new(uniform_buffer);
+                    let uniform_buffer = Handle::new(uniform_buffer);
                     let uniform_set = UniformSet::new(&self._device, vec![uniform_buffer]);
                     self.static_uniform_set = Some(uniform_set);
 
@@ -74,7 +76,7 @@ impl RenderNode {
                     dynamic_uniform_buffer = Some(dynamic_uniform_set.uniform_buffers[dynamic_uniform_set.uniform_buffers.len() - 1].clone());
                 } else {
                     let uniform_buffer = UniformBuffer::new(self._device.clone(), self._queue.clone(), data);
-                    let uniform_buffer = Arc::new(uniform_buffer);
+                    let uniform_buffer = Handle::new(uniform_buffer);
                     let uniform_set = UniformSet::new(&self._device, vec![uniform_buffer]);
                     self.dynamic_uniform_set = Some(uniform_set);
                     dynamic_uniform_buffer = Some(self.dynamic_uniform_set.as_ref().unwrap().uniform_buffers[0].clone());
@@ -83,6 +85,28 @@ impl RenderNode {
         }
 
         dynamic_uniform_buffer
+    }
+
+    // Add an existing uniform buffer to the node
+    pub fn add_uniform_buffer_handle(&mut self, buffer: Handle<UniformBuffer>, buffer_type: UniformBufferType) {
+        match buffer_type {
+            UniformBufferType::STATIC => {
+                if let Some(static_uniform_set) = &mut self.static_uniform_set {
+                    static_uniform_set.add_existing_uniform_buffer(buffer.clone());
+                } else {
+                    let uniform_set = UniformSet::new(&self._device, vec![buffer.clone()]);
+                    self.static_uniform_set = Some(uniform_set);
+                }
+            }
+            UniformBufferType::DYNAMIC => {
+                if let Some(dynamic_uniform_set) = &mut self.dynamic_uniform_set {
+                    dynamic_uniform_set.add_existing_uniform_buffer(buffer.clone());
+                } else {
+                    let uniform_set = UniformSet::new(&self._device, vec![buffer.clone()]);
+                    self.dynamic_uniform_set = Some(uniform_set);
+                }
+            }
+        }
     }
 
     pub(super) fn build_pipeline(&mut self, resource_manager: &mut ResourceManager) {
@@ -96,6 +120,7 @@ impl RenderNode {
         }
 
         if let Some(dynamic_uniform_set) = &self.dynamic_uniform_set {
+            println!("Adding dynamic uniform set");
             bind_group_layouts.push(&dynamic_uniform_set.bind_group_layout);
         }
 
@@ -121,13 +146,13 @@ impl RenderNode {
                     // Convert the transform instances to instances
                     let instances: Vec<Instance> = transform_instances.iter().map(|transform| transform.to_instance()).collect();
 
-                    let buffer = resource_manager.build_instance_buffer(&instances);
+                    let instance_buffer = resource_manager.build_instance_buffer(&instances);
 
                     let mesh = resource_manager.get_mesh_mut(mesh_id.clone()).unwrap_or_else(
                         || panic!("Mesh with id {} not found", mesh_id)
                     );
 
-                    mesh.set_instances(instances, buffer);
+                    mesh.set_instances(instance_buffer);
                 }
                 _ => {}
             }
@@ -173,7 +198,7 @@ impl RenderNode {
 
             let depth_texture = resource_manager.load_depth_texture();
 
-            let depth_texture_locked = depth_texture.lock().unwrap();
+            let depth_texture = depth_texture.lock().unwrap();
 
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some(&self.name),
@@ -192,7 +217,7 @@ impl RenderNode {
                 })],
                 depth_stencil_attachment: if self.use_depth {
                     Some(wgpu::RenderPassDepthStencilAttachment {
-                        view: &depth_texture_locked.view,
+                        view: &depth_texture.view,
                         depth_ops: Some(wgpu::Operations {
                             load: if id == 0 {
                                 wgpu::LoadOp::Clear(1.0)
@@ -214,13 +239,16 @@ impl RenderNode {
             // If either the static or dynamic uniform set is not None, bind them
 
             // 0 is reserved for the projection matrix + view + model matrix
+            let using_static_uniform_set = self.static_uniform_set.is_some();
 
             if let Some(static_uniform_set) = &self.static_uniform_set {
                 static_uniform_set.bind(0, &mut render_pass);
             }
 
             if let Some(dynamic_uniform_set) = &self.dynamic_uniform_set {
-                dynamic_uniform_set.bind(1, &mut render_pass);
+                dynamic_uniform_set.bind(
+                    if using_static_uniform_set { 1 } else { 0 }, 
+                    &mut render_pass);
             }
 
 
@@ -233,7 +261,7 @@ impl RenderNode {
                             mesh.render(&mut render_pass);
                         }
                     }
-                    Command::DrawMeshInstanced(mesh_id, count, _) => {
+                    Command::DrawMeshInstanced(mesh_id, _, _) => {
                         let mesh = resource_manager.get_mesh(mesh_id.clone());
 
                         if let Some(mesh) = mesh {

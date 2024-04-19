@@ -1,6 +1,7 @@
 use crate::{Handle, MutHandle};
 
 use log::{error, info};
+use wgpu::rwh::{HasDisplayHandle, HasWindowHandle};
 use std::sync::{Arc, Mutex};
 use wgpu::{Adapter, Device, Instance, Surface, SurfaceConfiguration};
 use winit::dpi::PhysicalSize;
@@ -13,13 +14,13 @@ pub struct SurfaceWrapper {
 
 impl SurfaceWrapper {
     pub fn new(instance: Handle<Instance>, window: Handle<Window>) -> Self {
-        let surface = instance.create_surface(window).unwrap_or_else(|err| {
+        let surface = instance.create_surface(window.inner).unwrap_or_else(|err| {
             error!("Failed to create surface: {:?}", err);
             panic!("Failed to create surface: {:?}", err)
         });
 
         Self {
-            surface: Arc::new(surface),
+            surface: Handle::new(surface),
             surface_config: None,
         }
     }
@@ -71,7 +72,7 @@ impl SurfaceWrapper {
         self.surface.configure(&device, &config);
 
         // Update the stored configuration
-        self.surface_config = Some(Arc::new(Mutex::new(config)));
+        self.surface_config = Some(MutHandle::new(config));
     }
 
     pub fn resize(&mut self, device: Handle<Device>, new_size: winit::dpi::PhysicalSize<u32>) {
@@ -83,12 +84,11 @@ impl SurfaceWrapper {
 
         if let Some(config) = &mut self.surface_config {
             info!("Resizing window to {:?}", new_size);
-
-            let config = &mut *config.lock().unwrap();
+            let mut config = config.lock().unwrap();
 
             config.width = new_size.width;
             config.height = new_size.height;
-            self.surface.configure(&device, config);
+            self.surface.configure(&device, &config);
         }
     }
 
@@ -111,7 +111,7 @@ impl SurfaceWrapper {
                 self.surface.configure(
                     &device,
                     &self.surface_config
-                        .clone()
+                        .as_ref()
                         .unwrap_or_else(|| {
                             error!("Surface configuration is not set.");
                             panic!("Surface configuration is not set.");
