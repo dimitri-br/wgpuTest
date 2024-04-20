@@ -1,20 +1,19 @@
-use crate::Handle;
-use super::commands::Command;
+use crate::{Handle, MutHandle};
+use super::commands::{Command, DrawCommand};
 use crate::pipeline::Pipeline;
 
 use std::fs::File;
-use std::io::{Read, Write};
-use std::sync::Arc;
-use encase::internal::WriteInto;
-use encase::ShaderType;
-use wgpu::include_spirv;
-use crate::render_graph::ResourceManager;
+use std::io::Read;
+use crate::render_graph::{ResourceHandle, ResourceManager, ResourceType};
 use crate::types::{Instance, Uniform, UniformBuffer, UniformBufferType, UniformSet, Vertex};
 
 pub struct RenderNode {
     pub name: String,
 
     commands: Vec<Command>,
+
+    compiled_commands: Vec<DrawCommand>,
+
     pipeline: Option<Pipeline>, // The pipeline that this node will use to render.
 
     static_uniform_set: Option<UniformSet>,
@@ -32,6 +31,7 @@ impl RenderNode {
         Self {
             name,
             commands: Vec::new(),
+            compiled_commands: Vec::new(),
             pipeline: None,
             static_uniform_set: None,
             dynamic_uniform_set: None,
@@ -109,10 +109,13 @@ impl RenderNode {
         }
     }
 
-    pub(super) fn build_pipeline(&mut self, resource_manager: &mut ResourceManager) {
+    pub(super) fn build_pipeline(&mut self, resource_manager: MutHandle<ResourceManager>) {
+        let mut resource_manager = resource_manager.lock().unwrap();
+
         let mut shader_module = None;
         let mut bind_group_layouts = Vec::new();
         let mut vertex_buffer_layouts = vec![Vertex::desc()];
+        let mut compiled_commands = Vec::new();
 
         // Get our bind group layouts from our uniform sets
         if let Some(static_uniform_set) = &self.static_uniform_set {
@@ -127,40 +130,6 @@ impl RenderNode {
         // Load all textures and meshes
         for command in self.commands.iter(){
             match command{
-                Command::BindTexture(_, texture_id) => {
-                    resource_manager.load_texture(texture_id.clone(), texture_id.clone());
-                }
-                Command::DrawMesh(mesh_id) => {
-                    // Load the mesh
-                    resource_manager.load_mesh(mesh_id.clone(), mesh_id);
-                }
-                Command::DrawMeshInstanced(mesh_id, _, transform_instances) => {
-                    // add vertex_buffer_layouts.push(Instance::desc()); if it doesn't already exist
-                    if !vertex_buffer_layouts.contains(&Instance::desc()) {
-                        vertex_buffer_layouts.push(Instance::desc());
-                    }
-
-                    // Load the mesh
-                    resource_manager.load_mesh(mesh_id.clone(), mesh_id);
-
-                    // Convert the transform instances to instances
-                    let instances: Vec<Instance> = transform_instances.iter().map(|transform| transform.to_instance()).collect();
-
-                    let instance_buffer = resource_manager.build_instance_buffer(&instances);
-
-                    let mesh = resource_manager.get_mesh_mut(mesh_id.clone()).unwrap_or_else(
-                        || panic!("Mesh with id {} not found", mesh_id)
-                    );
-
-                    mesh.set_instances(&self._device.clone(), instance_buffer);
-                }
-                _ => {}
-            }
-        }
-
-        // Now generate needed values to render
-        for command in self.commands.iter() {
-            match command {
                 Command::LoadShader(shader) => {
                     // Load the shader
                     let mut file = File::open(shader).unwrap();
@@ -174,14 +143,54 @@ impl RenderNode {
 
                     shader_module = Some(module);
                 }
-                Command::BindTexture(_, texture_id) => {
-                    // Load the texture
-                    let texture = resource_manager.get_texture(texture_id.clone());
-                    println!("Loading texture: {:?}", texture_id);
+                Command::BindTexture(idx, texture_id) => {
+                    let texture_handle = ResourceHandle::new(texture_id.clone(), ResourceType::Texture);
+                    resource_manager.load_texture(texture_handle.clone(), texture_id.clone());
+                    compiled_commands.push(DrawCommand::BindTexture(*idx, texture_handle));
+                }
+                Command::DrawMesh(mesh_id) => {
+                    // Load the mesh
+                    let mesh_handle = ResourceHandle::new(mesh_id.clone(), ResourceType::Mesh);
+                    resource_manager.load_mesh(mesh_handle.clone(), mesh_id);
+
+                    compiled_commands.push(DrawCommand::DrawMesh(mesh_handle));
+                }
+                Command::DrawMeshInstanced(mesh_id, transform_instances) => {
+                    // add vertex_buffer_layouts.push(Instance::desc()); if it doesn't already exist
+                    if !vertex_buffer_layouts.contains(&Instance::desc()) {
+                        vertex_buffer_layouts.push(Instance::desc());
+                    }
+
+                    let mesh_handle = ResourceHandle::new(mesh_id.clone(), ResourceType::Mesh);
+
+                    // Convert the transform instances to instances
+                    let instances: Vec<Instance> = transform_instances.iter().map(|transform| transform.to_instance()).collect();
+                    let instance_buffer = resource_manager.build_instance_buffer(&instances);
+
+                    // Load the mesh
+                    resource_manager.load_mesh(mesh_handle.clone(), mesh_id);
+
+                    let mesh = resource_manager.get_mesh_mut(mesh_handle.clone()).unwrap_or_else(
+                        || panic!("Mesh with id {} not found", mesh_id)
+                    );
+
+                    mesh.set_instances(&self._device.clone(), instance_buffer);
+
+                    compiled_commands.push(DrawCommand::DrawMeshInstanced(mesh_handle));
+                }
+                _ => {}
+            }
+        }
+
+
+        for command in compiled_commands.iter(){
+            match command{
+                DrawCommand::BindTexture(_, texture_handle) => {
+                    let texture = resource_manager.get_texture(texture_handle.clone());
                     if let Some(texture) = texture {
                         bind_group_layouts.push(texture.get_bind_group_layout());
                     }
-                }
+                },
                 _ => {}
             }
         }
@@ -190,11 +199,14 @@ impl RenderNode {
                                      bind_group_layouts, vertex_buffer_layouts, self.use_depth);
 
         self.pipeline = Some(pipeline);
+        self.compiled_commands = compiled_commands;
     }
 
     pub(super) fn execute(&self, id: usize, texture_view: &wgpu::TextureView,
-                          resource_manager: &mut ResourceManager, encoder: &mut wgpu::CommandEncoder) {
+                          resource_manager: MutHandle<ResourceManager>, encoder: &mut wgpu::CommandEncoder) {
         if let Some(pipeline) = &self.pipeline {
+
+            let mut resource_manager = resource_manager.lock().unwrap();
 
             let depth_texture = resource_manager.load_depth_texture();
 
@@ -252,23 +264,23 @@ impl RenderNode {
             }
 
 
-            for command in self.commands.iter() {
+            for command in self.compiled_commands.iter() {
                 match command {
-                    Command::DrawMesh(mesh_id) => {
+                    DrawCommand::DrawMesh(mesh_id) => {
                         let mesh = resource_manager.get_mesh(mesh_id.clone());
 
                         if let Some(mesh) = mesh {
                             mesh.render(&mut render_pass);
                         }
                     }
-                    Command::DrawMeshInstanced(mesh_id, _, _) => {
+                    DrawCommand::DrawMeshInstanced(mesh_id) => {
                         let mesh = resource_manager.get_mesh(mesh_id.clone());
 
                         if let Some(mesh) = mesh {
                             mesh.render_instanced(&mut render_pass);
                         }
                     }
-                    Command::BindTexture(index, texture_id) => {
+                    DrawCommand::BindTexture(index, texture_id) => {
                         let texture = resource_manager.get_texture(texture_id.clone());
 
                         if let Some(texture) = texture {

@@ -1,6 +1,7 @@
 use log::{info, warn};
 use rand::Rng;
-use winit::event::{Event, WindowEvent};
+use winit::event::{Event, KeyEvent, WindowEvent};
+use winit::keyboard::{KeyCode, PhysicalKey};
 use minirender::{Command, Renderer, Transform, UniformBufferType};
 
 
@@ -94,7 +95,7 @@ fn main() {
     );
 
     instanced_render_node.add_command(
-        Command::DrawMeshInstanced("examples/meshes/cube obj.obj".to_string(), transforms.len() as u32, transforms)
+        Command::DrawMeshInstanced("examples/meshes/cube obj.obj".to_string(), transforms)
     );
 
     renderer.add_render_node(instanced_render_node);
@@ -121,6 +122,18 @@ fn main() {
                         }
                         WindowEvent::Resized(new_size) => {
                             camera.resize(*new_size);
+                        },
+                        WindowEvent::KeyboardInput { event, .. } => {
+                            match event {
+                                KeyEvent { physical_key, ..} => {
+                                    match physical_key {
+                                        PhysicalKey::Code(code) => {
+                                            handle_input(&code, &mut camera);
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                            }
                         }
                         _ => {}
                     }
@@ -134,29 +147,8 @@ fn main() {
                         }
                         winit::event::DeviceEvent::Key(input) => {
                             match input.physical_key {
-                                winit::keyboard::PhysicalKey::Code(code) =>{
-                                    match code {
-                                        winit::keyboard::KeyCode::KeyW => {
-                                            camera.move_position(nalgebra::Vector3::new(0.0, 0.0, 0.25));
-                                        }
-                                        winit::keyboard::KeyCode::KeyS => {
-                                            camera.move_position(nalgebra::Vector3::new(0.0, 0.0, -0.25));
-                                        }
-                                        winit::keyboard::KeyCode::KeyA => {
-                                            camera.move_position(nalgebra::Vector3::new(-0.25, 0.0, 0.0));
-                                        }
-                                        winit::keyboard::KeyCode::KeyD => {
-                                            camera.move_position(nalgebra::Vector3::new(0.25, 0.0, 0.0));
-                                        }
-                                        winit::keyboard::KeyCode::KeyQ => {
-                                            camera.move_position(nalgebra::Vector3::new(0.0, -0.25, 0.0));
-                                        }
-                                        winit::keyboard::KeyCode::KeyE => {
-                                            camera.move_position(nalgebra::Vector3::new(0.0, 0.25, 0.0));
-                                        }
-                                        _ => {}
-                                    }
-                                
+                                PhysicalKey::Code(code) =>{
+                                    handle_input(&code, &mut camera);
                                 }
                                 _ => {}
                             }
@@ -173,4 +165,29 @@ fn main() {
             }
         })
         .unwrap();
+}
+
+
+fn handle_input(code: &KeyCode, camera: &mut minirender::Camera) {
+    match code {
+        KeyCode::KeyW => {
+            camera.move_position(nalgebra::Vector3::new(0.0, 0.0, 0.25));
+        }
+        KeyCode::KeyS => {
+            camera.move_position(nalgebra::Vector3::new(0.0, 0.0, -0.25));
+        }
+        KeyCode::KeyA => {
+            camera.move_position(nalgebra::Vector3::new(-0.25, 0.0, 0.0));
+        }
+        KeyCode::KeyD => {
+            camera.move_position(nalgebra::Vector3::new(0.25, 0.0, 0.0));
+        }
+        KeyCode::KeyQ => {
+            camera.move_position(nalgebra::Vector3::new(0.0, -0.25, 0.0));
+        }
+        KeyCode::KeyE => {
+            camera.move_position(nalgebra::Vector3::new(0.0, 0.25, 0.0));
+        }
+        _ => {}
+    }
 }

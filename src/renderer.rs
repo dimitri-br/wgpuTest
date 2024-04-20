@@ -21,7 +21,7 @@ pub struct Renderer {
     size: PhysicalSize<u32>,
 
     render_graph: RenderGraph,
-    resource_manager: ResourceManager,
+    resource_manager: MutHandle<ResourceManager>,
 
     pub last_frame: std::time::Instant,
 }
@@ -76,14 +76,14 @@ impl Renderer {
             surface_wrapper,
             size,
             render_graph,
-            resource_manager,
+            resource_manager: MutHandle::new(resource_manager),
 
             last_frame: std::time::Instant::now(),
         })
     }
 
     pub fn initialize(&mut self) {
-        self.render_graph.build(&mut self.resource_manager);
+        self.render_graph.build(self.resource_manager.clone());
 
         // Lock the cursor
         self.window.set_cursor_grab(CursorGrabMode::Confined)
@@ -148,7 +148,7 @@ impl Renderer {
             .begin_command_buffer(Some("Command Encoder"));
 
         // Iterate over the render graph and execute each node
-        self.render_graph.execute(&frame_view, &mut self.resource_manager, &mut encoder);
+        self.render_graph.execute(&frame_view, self.resource_manager.clone(), &mut encoder);
 
         // Submit the render pass
         self.device_handler.submit_command_encoder(encoder);

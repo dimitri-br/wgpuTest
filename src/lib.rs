@@ -61,6 +61,10 @@ impl<T> MutHandle<T> {
     pub fn lock(&self) -> std::sync::LockResult<std::sync::MutexGuard<T>> {
         self.inner.lock()
     }
+
+    pub fn borrow<'a>(&'a self) -> std::sync::MutexGuard<T> {
+        self.inner.lock().unwrap()
+    }
 }
 
 impl<T> Clone for MutHandle<T> {
