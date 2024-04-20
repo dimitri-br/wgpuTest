@@ -77,7 +77,7 @@ impl ResourceManager{
         }
 
         // Load the mesh
-        let mesh = Mesh::load_from_file(self.device.clone(), path, self);
+        let mesh = Mesh::load_from_file(self.device.clone(), path);
 
         self.meshes.insert(id.clone(), mesh);
 

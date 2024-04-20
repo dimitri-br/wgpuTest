@@ -7,6 +7,7 @@ mod vertex;
 mod uniform_buffer;
 mod uniform_set;
 mod transform;
+mod render_object;
 
 pub use camera::Camera;
 pub use instance_buffer::InstanceBuffer;

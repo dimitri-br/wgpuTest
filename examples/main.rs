@@ -67,7 +67,7 @@ fn main() {
     );
 
     instanced_render_node.add_uniform_buffer_handle(camera_buffer.clone().unwrap(), UniformBufferType::DYNAMIC);
-
+    
     let mut transforms = Vec::new();
     // Generate a bunch of cubes in a grid
     for x in -15..15 {

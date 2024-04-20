@@ -1,5 +1,6 @@
 use crate::types::{Instance, Vertex};
 use wgpu::util::{DeviceExt, DrawIndirectArgs, DrawIndexedIndirectArgs};
+use crate::Handle;
 
 use super::InstanceBuffer;
 
@@ -10,7 +11,7 @@ pub struct Mesh {
 
 impl Mesh {
     pub fn load_from_file<T: AsRef<std::path::Path> + std::fmt::Debug>(
-        device: &wgpu::Device,
+        device: Handle<wgpu::Device>,
         path: T,
     ) -> Self {
         let load_options = tobj::LoadOptions {
@@ -66,7 +67,7 @@ impl Mesh {
 
             let indices = &mesh.mesh.indices;
 
-            submeshes.push(Submesh::new(device, &vertices, indices));
+            submeshes.push(Submesh::new(&device, &vertices, indices));
         }
 
         Self {
